@@ -1,0 +1,534 @@
+
+
+//  Chatttr.sketchplugin
+
+//  Stewart Smith
+//  Twitter @stewd_io
+//  Web      stewd.io
+//  GitHub   stewdio
+
+
+var verbose = true
+
+
+
+
+
+
+
+
+//  Let’s get going.
+
+if( verbose ) log( '// /  /    /        /                /                                /' )
+
+
+//  Get the current “canvas”
+//  and its dimensions.
+
+var 
+page = doc.currentPage(),
+artboard = page.currentArtboard() || ( page.artboards().count() ? page.artboards()[0] : null ),
+artboardFrame,
+canvas, canvasFrame, canvasMinDim
+
+if( artboard ){
+
+	if( verbose ) log( 'We’re going to reuse an existing artboard as our canvas.' )
+	canvas = artboard
+}
+else {
+
+	if( verbose ) log( 'No artboard exists so we’re going to create a new one to use as our canvas.' )
+	artboard = MSArtboardGroup.new()
+	artboard.setName( 'Chatttr board' )
+	artboard.frame().setWidth(  640 )//432
+	artboard.frame().setHeight( 160 * 5 )
+	page.addLayer( artboard )
+	canvas = artboard	
+}
+canvasFrame = canvas.frame()
+canvasMinDim = Math.min( canvasFrame.width(), canvasFrame.height() )
+if( verbose ) log( 'Our canvas is named “'+ canvas.name() +'” and is '+ canvasFrame.width() +' × '+ canvasFrame.height() +'.' )
+
+
+//  Seemed like a good idea to bake this right in
+//  since I’ve had to do so much guess and check work
+//  with creating Paths in Sketch:
+
+if( selection.count() > 0 ) inspect( selection[0] )
+
+
+
+
+//  This is what kicks everything off.
+//  Right now it’s a tiny ’lil demo
+//  but we could wrap this in a setInterval()
+//  and create other appropriate wrappers
+//  to make this more fully functional...
+
+fetchEntries()
+
+
+
+
+
+
+
+
+
+
+
+
+//  Object inspection,
+//  copied from github.com/sketchplugins/plugin-requests
+
+function inspect( obj ){
+
+	if( obj === undefined ) obj = doc.currentPage().currentArtboard()
+
+	log( ' ' )
+	log( '============================================================' )
+	log( 'Object   '+ obj )
+	log( 'of Class '+ [obj className] )
+	log( '------------------------------------------------------------' )
+	log( '.properties' )
+	log( [obj class].mocha().properties() )
+	log( '.propertiesWithAncestors' )
+	log( [obj class].mocha().propertiesWithAncestors() )
+	log( '------------------------------------------------------------' )
+	log( '.classMethods' )
+	log( [obj class].mocha().classMethods() )
+	log( '.classMethodsWithAncestors' )
+	log( [obj class].mocha().classMethodsWithAncestors() )
+	log( '------------------------------------------------------------' )
+	log( '.instanceMethods' )
+	log( [obj class].mocha().instanceMethods() )
+	log( '.instanceMethodsWithAncestors' )
+	log( [obj class].mocha().instanceMethodsWithAncestors() )
+	log( '------------------------------------------------------------' )
+	log( '.protocols' )
+	log( [obj class].mocha().protocols() )
+	log( '.protocolsWithAncestors' )
+	log( [obj class].mocha().protocolsWithAncestors() )
+	log( '------------------------------------------------------------' )
+	log( '.treeAsDictionary()' )
+	log( obj.treeAsDictionary() )
+	log( '============================================================' )
+	log( ' ' )
+}
+
+
+
+
+//  How long ago did that happen?
+
+function timeAgo( unix ){
+	
+	var 
+	granularity = 1,
+	format = 'D. d M Y',//  Not using this for the moment.	
+	now = Math.round(( new Date() ) / 1000 ),//  Get rid of milliseconds
+	difference = now - unix,
+	periods, output,
+	i, unit, value,
+	time
+	
+	if( difference < 0 ) return '0 seconds ago'
+	else if( difference < 31104000 ){ // year!
+	
+		periods = [ 
+
+			[ 'month'  , 2592000 ],
+			[ 'week'   ,  604800 ],
+			[ 'day'    ,   86400 ],
+			[ 'hour'   ,    3600 ],
+			[ 'minute' ,      60 ],
+			[ 'second' ,       1 ]
+		]
+		output = ''
+
+		for( i = 0; i < periods.length; i ++ ){
+
+			unit  = periods[ i ][ 0 ]
+			value = periods[ i ][ 1 ]
+
+			if( difference >= value ){
+
+				time = Math.round( difference / value )
+				difference %= value
+				output += ( output ? ' ' : '' ) + time + ' '
+				output += (( time > 1 ) ? unit + 's' : unit )
+				granularity --
+			}
+			if( granularity == 0 ) break
+		}
+		return ( output ? output : '0 seconds' ) + ' ago'
+	}
+	else return 'too long ago'
+}
+
+
+
+
+function fetchEntries(){
+
+	var
+	url,
+	request,
+	responseData,
+	responseDataAsText,
+	responseDataAsJS
+
+
+	//  Ok, we’re about to send a SYNCHRONOUS request to the Chatttr server
+	//  which will hang our script until a responce comes back.
+	//  This is just what the examples use that I’ve seen.
+	//  Will try out an ASYNCHRONOUS version later but for now... Works!
+
+	url = [NSURL URLWithString:'http://chatttr.com/scripts/chatttr-io.js?r=chatttr.sketchplugin&u=sketchbot&x=rN1Ac5JaIQBBjEffEZj6aaH8vHxeYGwG']
+	request = NSMutableURLRequest.requestWithURL_cachePolicy_timeoutInterval( 
+		
+		url,
+		NSURLRequestReloadIgnoringLocalCacheData,
+		60
+	)
+	request.setHTTPMethod_( 'GET' )
+	if( verbose ) log( 'Sending SYNCHRONOUS request to Chatttr server...' )
+	responseData = [NSURLConnection sendSynchronousRequest:request returningResponse:nil error:nil]	
+	if( responseData != nil ){
+
+		if( verbose ) log( 'Received a response from Chatttr server! Yay!' )
+		responseDataAsText = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding]
+
+
+		//  Here it is, my biggest JS sin.
+		//  What would Doug Crockford say?
+		//  I know, I know. Don’t look at me. 
+		//  I’m hideous.
+
+		responseDataAsJS = eval( responseDataAsText +' ' )
+
+
+		//  We only really care about the last 5 entries
+		//  because, hey, this is only a demo.
+
+		while( responseDataAsJS.entries.length > 5 ) responseDataAsJS.entries.shift()
+		renderEntries( responseDataAsJS.entries )
+	}
+	else if( verbose ) log( 'Oh snap. Our request timed out without a response!!' )
+}
+
+
+
+
+function renderEntries( entries ){
+
+	var
+	userName,
+	userId,
+	userColor, userRGB,
+	when,
+	message,
+	drawing
+
+
+	//  For each entry we need to create a panel
+	//  that is 640 pixels wide
+	//  and if a drawing then 160 pixels tall,
+	//  but if text then undetermined height.
+	
+	entries.forEach( function( entry, i ){
+
+		userName  = entry.u
+		userId    = ('000'+entry.w[0]).slice(-3) +'-'+ ('000'+entry.w[1]).slice(-3) +'-'+ ('000'+entry.w[2]).slice(-3)
+		userColor = [MSColor colorWithRed:(entry.c[0]/255) green:(entry.c[1]/255) blue:(entry.c[2]/255) alpha:1]
+		userRGB   = 'Red:'+ ('000'+entry.c[0]).slice(-3) +' Green:'+ ('000'+entry.c[1]).slice(-3) +' Blue:'+ ('000'+entry.c[2]).slice(-3)
+		when      = timeAgo( entry.t )
+		message   = entry.m
+		drawing   = entry.d
+
+		if( verbose ){
+			
+			log( '------------------------------------------------------------' )
+			log( 'USERNAME: '+ userName )
+			log( 'USER ID:  '+ userId )
+			log( 'USER RGB: '+ userRGB )
+			log( 'MESSAGE:  '+ message )
+			log( 'DRAWING:  '+ drawing )
+			log( 'WHEN:     '+ when )
+		}
+
+
+		var 
+		panel         = canvas.addLayerOfType( 'group' ),
+		userNameLayer = panel.addLayerOfType( 'text' ),
+		userIdLayer   = panel.addLayerOfType( 'text' ),
+		whenLayer     = panel.addLayerOfType( 'text' ),
+		messageLayer
+
+		panel.setName( 'Panel' )
+		panel.frame().setX( 0 )
+		panel.frame().setY( i * 160 )//@@  not quite right... will need to fix because of variable height of text messages!
+		panel.frame().setWidth( 640 )
+		panel.frame().setHeight( 160 )//@@ should really be AUTO !
+
+
+		//  For the Text groups I’ve noticed it’s a good idea
+		//  to set the text FIRST, then set the Width and Height
+		//  otherwise Sketch might automagically crop the text
+		//  for reasons yet unknown...
+
+		if( drawing !== undefined ) importDrawingFromString( drawing, panel )
+		else {
+
+			messageLayer = panel.addLayerOfType( 'text' )
+			messageLayer.setName( 'Message' )
+			//font face?!?!??!
+			messageLayer.fontSize = 18
+			messageLayer.textColor = [MSColor colorWithRed:(26/255) green:(26/255) blue:(26/255) alpha:1]
+			messageLayer.setStringValue( message )
+			messageLayer.frame().setX( 168 )
+			messageLayer.frame().setY( 8 )
+			messageLayer.frame().setWidth( 432 )
+		}
+
+		userNameLayer.setName( 'User name' )
+		//font face?!?!??!
+		userNameLayer.fontSize = 18
+		userNameLayer.textColor = userColor
+		userNameLayer.setStringValue( userName )		
+		userNameLayer.frame().setX( 8 )
+		userNameLayer.frame().setY( 8 )
+		userNameLayer.frame().setWidth( 144 )
+
+		userIdLayer.setName( 'User ID' )
+		//font face?!?!??!
+		userIdLayer.fontSize = 12
+		userIdLayer.textColor = [MSColor colorWithRed:(217/255) green:(217/255) blue:(217/255) alpha:1]
+		userIdLayer.setStringValue( userId )
+		userIdLayer.frame().setX( 8 )
+		userIdLayer.frame().setY( 32 )
+		userIdLayer.frame().setWidth( 144 )
+		userIdLayer.frame().setHeight( 16 )
+
+		whenLayer.setName( 'When' )
+		//font face?!?!??!
+		whenLayer.fontSize = 12
+		whenLayer.textColor = [MSColor colorWithRed:(217/255) green:(217/255) blue:(217/255) alpha:1]
+		whenLayer.setStringValue( when )
+		whenLayer.frame().setX( 168 )
+		whenLayer.frame().setY( panel.frame().height() - 32 )
+		whenLayer.frame().setWidth( 432 )
+		whenLayer.frame().setHeight( 16 )
+
+	})
+	if( verbose ) log( '------------------------------------------------------------' )
+}
+
+
+
+
+//  Some old actual Chatttr code pulled out of the JS file
+//  for possible later implentation in Sketch...
+
+function exportDrawingToString(){
+			
+	var str,
+		p,
+		s,
+		segment;
+	str = '';
+	for( var p = 0; p < this.activeLayer.children.length; p ++ )
+	{
+		str += 'p';
+		for( s = 0; s < this.activeLayer.children[ p ].segments.length; s ++ )
+		{
+			segment = this.activeLayer.children[ p ].segments[ s ];
+			str += 's';
+			str += 'c' + segment.point.x;
+			str += 'c' + segment.point.y;
+			str += 'c' + segment.handleIn.x;
+			str += 'c' + segment.handleIn.y;
+			str += 'c' + segment.handleOut.x;
+			str += 'c' + segment.handleOut.y;
+		};
+	};
+	return str;
+}
+
+
+
+
+
+
+/*
+
+____________________________________________________________
+A simple drawing for testing the importDrawingFromString function:
+
+psc167c128c0c0c-59c0sc184c58c-73c-9c18c2sc213c102c9c-13c-9c13sc179c129c14c0c0c0
+
+
+____________________________________________________________
+Here’s that data broken apart for legibility:
+
+p
+s
+	c167 c128
+	c0   c0
+	c-59 c0
+s
+	c184 c58
+	c-73 c-9
+	c18  c2
+s
+	c213 c102
+	c9   c-13
+	c-9  c13
+s
+	c179 c129
+	c14  c0
+	c0   c0
+
+
+____________________________________________________________
+And here’s a map of what that data means:
+
+p  ** START A NEW PATH
+s  ** START A NEW SEGMENT
+	c167 c128  ** PLACE AN ANCHOR POINT AT COORDINATES X:167, Y:128
+	c0   c0    ** CREATE A BEZIER HANDLE-IN AT COORDINATES X:+0, Y:+0 RELATIVE TO THE ANCHOR POINT.
+	c-59 c0    ** CREATE A BEZIER HANDLE-OUT AT COORDINATES X:-59, Y:+0 RELATIVE TO THE ANCHOR POINT.
+s  ** START A NEW SEGMENT
+...
+
+
+*/
+
+
+//  Take a single panel drawing encoded as a String
+//  and render all of its Paths into a Shape Group.
+
+function importDrawingFromString( str, panel ){
+	
+	var 
+	shapeGroup,
+	style, stylePart,
+	shapePathLayer,
+	paths, path, p,
+	segments, segment, s,
+	coords
+
+
+	//  We need a Shape Group attached to our Panel.
+
+	if( panel === undefined ) panel = canvas
+	shapeGroup = MSShapeGroup.new()
+	shapeGroup.setName( 'Drawing' )
+	shapeGroup.frame().setX( 168 )
+	shapeGroup.frame().setWidth(  432 )
+	shapeGroup.frame().setHeight( 160 )
+	panel.addLayer( shapeGroup )
+
+
+	//  To this we can add Style !
+
+	style = [[shapeGroup style] borders]
+	stylePart = style.addNewStylePart()
+	stylePart.color = [MSColor colorWithRed:0 green:0 blue:0 alpha:0.8]
+	stylePart.thickness = 2
+
+
+	//  Now within the Shape Group we will create
+	//  a Shape Path Layer per Path.
+	//  I’m uncertain if this container is necessary
+	//  but it finally @#$%@#$% functions so...
+	//  I’ll just leave it alone as-is.
+
+	paths = str.split( 'p' )
+	for( p = 1; p < paths.length; p ++ ){
+
+		
+		//  Create our Shape Path Layer
+		//  and the Path it will contain.
+
+		shapePathLayer = MSShapePathLayer.new()
+		shapePathLayer.frame().setWidth(  432 )
+		shapePathLayer.frame().setHeight( 160 )
+		shapeGroup.addLayer( shapePathLayer )
+		path = MSShapePath.new()
+
+
+		//  Aight. Time to really dig into the Path data we received...
+		//  Paper.js thought of these as Path Segments
+		//  but Sketch calls them Curve Points.
+
+		segments = paths[ p ].split( 's' )
+		for( s = 1; s < segments.length; s ++ ){
+
+			coords = segments[ s ].split( 'c' )		
+			segment = MSCurvePoint.new()
+			segment.cornerRadius = 0
+			segment.curveMode    = 3//  Asymmetric Bezier handles!
+			segment.hasCurveFrom = 1//  Boolean 0 or 1.
+			segment.hasCurveTo   = 1//  Boolean 0 or 1.
+
+
+			//  Let’s plot our Anchor Point.
+			//  Internally Sketch thinks about Point positions
+			//  as a value between 0 and 1
+			//  that is relative to the size of the container.
+			//  Hence we divide X by the overall Width
+			//  and Y by the overall Height. You dig?
+
+			segment.setPoint({
+
+				x: +coords[ 1 ] / shapeGroup.frame().width(), 
+				y: +coords[ 2 ] / shapeGroup.frame().height()
+			})
+			
+
+			//  This is rather backwards from what I expected.
+			//  It seems this is true when translating from Paper.js to Sketch:
+			//  Sketch “curveFrom” = Paper.js “handleOut”
+			//  Sketch “curveTo”   = Paper.js “handleIn”
+			//  Took some experimentation to figure that out.
+
+			//  Oh, also in Paper.js Handles are positioned relative to their Anchor
+			//  whilst in Sketch they have absolute positions with the container!
+			//  Thus we must add each Handle’s X to the Anchor’s X
+			//  and each Handle’s Y to the Anchor’s Y.
+
+			segment.setCurveFrom({
+
+				x: ( +coords[ 1 ] + +coords[ 5 ] ) / shapeGroup.frame().width(), 
+				y: ( +coords[ 2 ] + +coords[ 6 ] ) / shapeGroup.frame().height()
+			})			
+			segment.setCurveTo({ 
+
+				x: ( +coords[ 1 ] + +coords[ 3 ] ) / shapeGroup.frame().width(), 
+				y: ( +coords[ 2 ] + +coords[ 4 ] ) / shapeGroup.frame().height()
+			})
+
+
+			//  Ok. All that work to create one Sketch “Curve Point”
+			//  which is a Paper.js “Segment”
+			//  and now we can add that bit to the Path we’re constructing.
+
+			path.addPoint( segment )			
+		}
+
+
+		//  Phew. We’re done constructing this Path.
+		//  Let’s insert it into the Shape Path Layer.
+
+		shapePathLayer.setPath( path )
+	}
+}
+
+
+
+
+
+
+
