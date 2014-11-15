@@ -29,7 +29,7 @@ var
 page = doc.currentPage(),
 artboard = page.currentArtboard() || ( page.artboards().count() ? page.artboards()[0] : null ),
 artboardFrame,
-canvas, canvasFrame, canvasMinDim
+canvas, canvasFrame
 
 if( artboard ){
 
@@ -41,13 +41,12 @@ else {
 	if( verbose ) log( 'No artboard exists so we’re going to create a new one to use as our canvas.' )
 	artboard = MSArtboardGroup.new()
 	artboard.setName( 'Chatttr board' )
-	artboard.frame().setWidth(  640 )//432
+	artboard.frame().setWidth(  640 )
 	artboard.frame().setHeight( 160 * 5 )
 	page.addLayer( artboard )
 	canvas = artboard	
 }
 canvasFrame = canvas.frame()
-canvasMinDim = Math.min( canvasFrame.width(), canvasFrame.height() )
 if( verbose ) log( 'Our canvas is named “'+ canvas.name() +'” and is '+ canvasFrame.width() +' × '+ canvasFrame.height() +'.' )
 
 
@@ -181,9 +180,15 @@ function fetchEntries(){
 
 
 	//  Ok, we’re about to send a SYNCHRONOUS request to the Chatttr server
-	//  which will hang our script until a responce comes back.
+	//  which will hang our script until a response comes back.
 	//  This is just what the examples use that I’ve seen.
 	//  Will try out an ASYNCHRONOUS version later but for now... Works!
+	//
+	//  Also this just inspired me to come up with the best / worst
+	//  coding pun of all time:
+	//  “Using synchronous requests gives me pause.”
+	//  (I know. I’m sorry.)
+	//  https://twitter.com/stewd_io/status/533578536255500289
 
 	url = [NSURL URLWithString:'http://chatttr.com/scripts/chatttr-io.js?r=chatttr.sketchplugin&u=sketchbot&x=rN1Ac5JaIQBBjEffEZj6aaH8vHxeYGwG']
 	request = NSMutableURLRequest.requestWithURL_cachePolicy_timeoutInterval( 
@@ -283,7 +288,7 @@ function renderEntries( entries ){
 
 			messageLayer = panel.addLayerOfType( 'text' )
 			messageLayer.setName( 'Message' )
-			//font face?!?!??!
+			//  I should figure out how to specify a font face here...
 			messageLayer.fontSize = 18
 			messageLayer.textColor = [MSColor colorWithRed:(26/255) green:(26/255) blue:(26/255) alpha:1]
 			messageLayer.setStringValue( message )
@@ -293,7 +298,7 @@ function renderEntries( entries ){
 		}
 
 		userNameLayer.setName( 'User name' )
-		//font face?!?!??!
+		//  I should figure out how to specify a font face here...
 		userNameLayer.fontSize = 18
 		userNameLayer.textColor = userColor
 		userNameLayer.setStringValue( userName )		
@@ -302,7 +307,7 @@ function renderEntries( entries ){
 		userNameLayer.frame().setWidth( 144 )
 
 		userIdLayer.setName( 'User ID' )
-		//font face?!?!??!
+		//  I should figure out how to specify a font face here...
 		userIdLayer.fontSize = 12
 		userIdLayer.textColor = [MSColor colorWithRed:(217/255) green:(217/255) blue:(217/255) alpha:1]
 		userIdLayer.setStringValue( userId )
@@ -312,7 +317,7 @@ function renderEntries( entries ){
 		userIdLayer.frame().setHeight( 16 )
 
 		whenLayer.setName( 'When' )
-		//font face?!?!??!
+		//  I should figure out how to specify a font face here...
 		whenLayer.fontSize = 12
 		whenLayer.textColor = [MSColor colorWithRed:(217/255) green:(217/255) blue:(217/255) alpha:1]
 		whenLayer.setStringValue( when )
